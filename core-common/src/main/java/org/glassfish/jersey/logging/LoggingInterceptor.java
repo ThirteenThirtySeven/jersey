@@ -56,13 +56,11 @@ import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.ext.WriterInterceptor;
 import javax.ws.rs.ext.WriterInterceptorContext;
-
 import org.glassfish.jersey.logging.LoggingFeature.Verbosity;
 import org.glassfish.jersey.message.MessageUtils;
 
@@ -93,15 +91,16 @@ abstract class LoggingInterceptor implements WriterInterceptor {
     private static final String NOTIFICATION_PREFIX = "* ";
     private static final MediaType TEXT_MEDIA_TYPE = new MediaType("text", "*");
 
-    private static final Set<MediaType> READABLE_APP_MEDIA_TYPES = new HashSet<MediaType>() {{
-        add(TEXT_MEDIA_TYPE);
-        add(MediaType.APPLICATION_ATOM_XML_TYPE);
-        add(MediaType.APPLICATION_FORM_URLENCODED_TYPE);
-        add(MediaType.APPLICATION_JSON_TYPE);
-        add(MediaType.APPLICATION_SVG_XML_TYPE);
-        add(MediaType.APPLICATION_XHTML_XML_TYPE);
-        add(MediaType.APPLICATION_XML_TYPE);
-    }};
+    private static final Set<MediaType> READABLE_APP_MEDIA_TYPES =
+            new HashSet<MediaType>() {{
+                add(TEXT_MEDIA_TYPE);
+                add(MediaType.APPLICATION_ATOM_XML_TYPE);
+                add(MediaType.APPLICATION_FORM_URLENCODED_TYPE);
+                add(MediaType.APPLICATION_JSON_TYPE);
+                add(MediaType.APPLICATION_SVG_XML_TYPE);
+                add(MediaType.APPLICATION_XHTML_XML_TYPE);
+                add(MediaType.APPLICATION_XML_TYPE);
+            }};
 
     private static final Comparator<Map.Entry<String, List<String>>> COMPARATOR =
             new Comparator<Map.Entry<String, List<String>>>() {
@@ -114,6 +113,7 @@ abstract class LoggingInterceptor implements WriterInterceptor {
 
     @SuppressWarnings("NonConstantLogger")
     final Logger logger;
+
     final Level level;
     final AtomicLong _id = new AtomicLong(0);
     final Verbosity verbosity;
@@ -154,27 +154,16 @@ abstract class LoggingInterceptor implements WriterInterceptor {
     }
 
     void printRequestLine(final StringBuilder b, final String note, final long id, final String method, final URI uri) {
-        prefixId(b, id).append(NOTIFICATION_PREFIX)
-                .append(note)
-                .append(" on thread ").append(Thread.currentThread().getName())
-                .append("\n");
-        prefixId(b, id).append(REQUEST_PREFIX).append(method).append(" ")
-                .append(uri.toASCIIString()).append("\n");
+        prefixId(b, id).append(NOTIFICATION_PREFIX).append(note).append(" on thread ").append(Thread.currentThread().getName()).append("\n");
+        prefixId(b, id).append(REQUEST_PREFIX).append(method).append(" ").append(uri.toASCIIString()).append("\n");
     }
 
     void printResponseLine(final StringBuilder b, final String note, final long id, final int status) {
-        prefixId(b, id).append(NOTIFICATION_PREFIX)
-                .append(note)
-                .append(" on thread ").append(Thread.currentThread().getName()).append("\n");
-        prefixId(b, id).append(RESPONSE_PREFIX)
-                .append(Integer.toString(status))
-                .append("\n");
+        prefixId(b, id).append(NOTIFICATION_PREFIX).append(note).append(" on thread ").append(Thread.currentThread().getName()).append("\n");
+        prefixId(b, id).append(RESPONSE_PREFIX).append(Integer.toString(status)).append("\n");
     }
 
-    void printPrefixedHeaders(final StringBuilder b,
-                              final long id,
-                              final String prefix,
-                              final MultivaluedMap<String, String> headers) {
+    void printPrefixedHeaders(final StringBuilder b, final long id, final String prefix, final MultivaluedMap<String, String> headers) {
         for (final Map.Entry<String, List<String>> headerEntry : getSortedHeaders(headers.entrySet())) {
             final List<?> val = headerEntry.getValue();
             final String header = headerEntry.getKey();
@@ -207,11 +196,14 @@ abstract class LoggingInterceptor implements WriterInterceptor {
             stream = new BufferedInputStream(stream);
         }
         stream.mark(maxEntitySize + 1);
+        int entityPosition = 0;
         final byte[] entity = new byte[maxEntitySize + 1];
-        final int entitySize = stream.read(entity);
-        b.append(new String(entity, 0, Math.min(entitySize, maxEntitySize), charset));
-        if (entitySize > maxEntitySize) {
-            b.append("...more...");
+        for (int entitySize = stream.read(entity); entitySize >= 0; entityPosition += (entitySize = stream.read(entity, 0, maxEntitySize - entityPosition))) {
+            b.append(new String(entity, 0, Math.min(entitySize, maxEntitySize), charset));
+            if (entityPosition > maxEntitySize) {
+                b.append("...more...");
+                break;
+            }
         }
         b.append('\n');
         stream.reset();
@@ -219,8 +211,7 @@ abstract class LoggingInterceptor implements WriterInterceptor {
     }
 
     @Override
-    public void aroundWriteTo(final WriterInterceptorContext writerInterceptorContext)
-            throws IOException, WebApplicationException {
+    public void aroundWriteTo(final WriterInterceptorContext writerInterceptorContext) throws IOException, WebApplicationException {
         final LoggingStream stream = (LoggingStream) writerInterceptorContext.getProperty(ENTITY_LOGGER_PROPERTY);
         writerInterceptorContext.proceed();
         if (logger.isLoggable(level) && printEntity(verbosity, writerInterceptorContext.getMediaType())) {
@@ -301,5 +292,4 @@ abstract class LoggingInterceptor implements WriterInterceptor {
             out.write(i);
         }
     }
-
 }
