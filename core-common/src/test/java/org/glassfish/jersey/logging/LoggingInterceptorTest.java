@@ -39,17 +39,27 @@
  */
 package org.glassfish.jersey.logging;
 
-import javax.ws.rs.core.MediaType;
-
-import org.junit.Test;
+import static javax.ws.rs.core.MediaType.APPLICATION_OCTET_STREAM_TYPE;
+import static javax.ws.rs.core.MediaType.TEXT_HTML_TYPE;
 import static org.glassfish.jersey.logging.LoggingFeature.Verbosity.HEADERS_ONLY;
 import static org.glassfish.jersey.logging.LoggingFeature.Verbosity.PAYLOAD_ANY;
 import static org.glassfish.jersey.logging.LoggingFeature.Verbosity.PAYLOAD_TEXT;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.any;
 
-import static javax.ws.rs.core.MediaType.APPLICATION_OCTET_STREAM_TYPE;
-import static javax.ws.rs.core.MediaType.TEXT_HTML_TYPE;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.Charset;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.ws.rs.core.MediaType;
+import org.hamcrest.Matchers;
+import org.junit.Test;
+import org.mockito.Mockito;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 /**
  * @author Ondrej Kosatka (ondrej.kosatka at oracle.com)
@@ -124,4 +134,33 @@ public class LoggingInterceptorTest {
         assertFalse(LoggingInterceptor.printEntity(HEADERS_ONLY, APPLICATION_OCTET_STREAM_TYPE));
     }
 
+
+    @Test
+    public void testLogInboundEntity() throws IOException {
+        Logger mockLog = Mockito.mock(Logger.class);
+        InputStream mockIs = Mockito.mock(InputStream.class);
+
+        Mockito.doReturn(true).when(mockIs).markSupported();
+        Mockito.doAnswer(new Answer() {
+            private int i = 0;
+            @Override
+            public Object answer(InvocationOnMock inv) throws Throwable {
+                do {
+                    inv.getArgumentAt(0, byte[].class)[0] = (byte) (65 + i++);
+                } while (i % 2 > 0);
+
+                return i % 2;
+            }
+        }).when(mockIs.read(any(byte[].class)));
+
+        LoggingInterceptor underTest = new LoggingInterceptor(mockLog, Level.ALL, LoggingFeature.Verbosity.PAYLOAD_ANY, 10) {
+
+        };
+
+        StringBuilder sb = new StringBuilder();
+
+        underTest.logInboundEntity(sb, mockIs, Charset.defaultCharset());
+
+        assertThat(sb, Matchers.equalTo(new StringBuilder().append("abcd")));
+    }
 }

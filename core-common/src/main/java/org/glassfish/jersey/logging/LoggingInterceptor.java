@@ -129,8 +129,12 @@ abstract class LoggingInterceptor implements WriterInterceptor {
      * @param maxEntitySize maximum number of entity bytes to be logged (and buffered) - if the entity is larger,
      *                      logging filter will print (and buffer in memory) only the specified number of bytes
      *                      and print "...more..." string at the end. Negative values are interpreted as zero.
+     * @throws IllegalArgumentException if maxEntitySize is == Integer.MAX_VALUE
      */
     LoggingInterceptor(final Logger logger, final Level level, final Verbosity verbosity, final int maxEntitySize) {
+        if (maxEntitySize >= Integer.MAX_VALUE - 1) {
+            throw new IllegalArgumentException("maxEntitySize must be Integer.MAX_VALUE - 1 or smaller");
+        }
         this.logger = logger;
         this.level = level;
         this.verbosity = verbosity;
@@ -207,11 +211,16 @@ abstract class LoggingInterceptor implements WriterInterceptor {
             stream = new BufferedInputStream(stream);
         }
         stream.mark(maxEntitySize + 1);
+        int entityPosition = 0;
         final byte[] entity = new byte[maxEntitySize + 1];
-        final int entitySize = stream.read(entity);
-        b.append(new String(entity, 0, Math.min(entitySize, maxEntitySize), charset));
-        if (entitySize > maxEntitySize) {
-            b.append("...more...");
+        for (int entitySize = stream.read(entity);
+             entitySize >= 0;
+             entityPosition += (entitySize = stream.read(entity, 0, maxEntitySize - entityPosition))) {
+            b.append(new String(entity, 0, Math.min(entitySize, maxEntitySize), charset));
+            if (entityPosition > maxEntitySize) {
+                b.append("...more...");
+                break;
+            }
         }
         b.append('\n');
         stream.reset();
@@ -219,8 +228,8 @@ abstract class LoggingInterceptor implements WriterInterceptor {
     }
 
     @Override
-    public void aroundWriteTo(final WriterInterceptorContext writerInterceptorContext)
-            throws IOException, WebApplicationException {
+    public void aroundWriteTo(final WriterInterceptorContext writerInterceptorContext) throws IOException,
+            WebApplicationException {
         final LoggingStream stream = (LoggingStream) writerInterceptorContext.getProperty(ENTITY_LOGGER_PROPERTY);
         writerInterceptorContext.proceed();
         if (logger.isLoggable(level) && printEntity(verbosity, writerInterceptorContext.getMediaType())) {
